@@ -12,11 +12,16 @@ const VerificationRoute = require('./Routes/Manual/Verification');
 const ResetPasswordRoute = require('./Routes/Manual/PasswordReset');
 const http = require('http');
 const socketIo = require('socket.io');
+const uuid = require('uuid')
+const { ExpressPeerServer } = require('peer');
+
+
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 dotenv.config();
+
 
 // Set up Passport Google Strategy
 passport.use(
@@ -30,98 +35,148 @@ passport.use(
     function (accessToken, refreshToken, profile, callback) {
       callback(null, profile);
     }
-  )
-);
+    )
+    );
+    
+    passport.serializeUser((user, done) => {
+      done(null, user);
+    });
+    
+    passport.deserializeUser((user, done) => {
+      done(null, user);
+    });
+    
+    // Use express-session middleware
+    app.use(session({ secret: 'your-secret-key', resave: true, saveUninitialized: true }));
+    
+    // Initialize Passport and restore authentication state if available
+    app.use(passport.initialize());
+    app.use(passport.session());
+    
+    // Include your routes
+    app.use('/auth', routes);
+    app.use('/auth/manual', SignupRoute);
+    app.use('/auth/manual', LoginRoute);
+    app.use('/auth/manual', VerificationRoute);
+    app.use('/auth/manual', ResetPasswordRoute);
+    
+    function Generate_ID (){
+      const ID = uuid.v4();
+      return ID;
+    }
+    
+    // Create an HTTP server
+    const server = http.createServer(app);
+    const peerServer = ExpressPeerServer(server, { debug: true, path: '/peerjs'  });
+    
+    app.use('/peerjs', peerServer);
+    
+    // Create a Socket.IO server attached to the HTTP server
+    const io = socketIo(server, {
+      cors: {
+        origin: '*',
+        methods: ['GET', 'POST'],
+      },
+    });
+    
+    const users = {};
+    
+    const socketToRoom = {};
 
-passport.serializeUser((user, done) => {
-  done(null, user);
-});
 
-passport.deserializeUser((user, done) => {
-  done(null, user);
-});
-
-// Use express-session middleware
-app.use(session({ secret: 'your-secret-key', resave: true, saveUninitialized: true }));
-
-// Initialize Passport and restore authentication state if available
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Include your routes
-app.use('/auth', routes);
-app.use('/auth/manual', SignupRoute);
-app.use('/auth/manual', LoginRoute);
-app.use('/auth/manual', VerificationRoute);
-app.use('/auth/manual', ResetPasswordRoute);
-
-// Create an HTTP server
-const server = http.createServer(app);
-
-// Create a Socket.IO server attached to the HTTP server
-const io = socketIo(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
-});
 
 // Socket.IO logic
 io.on('connection', (socket) => {
+
+
+  socket.on("join room", roomID => {
+    if (users[roomID]) {
+        const length = users[roomID].length;
+        if (length === 4) {
+            socket.emit("room full");
+            return;
+        }
+        users[roomID].push(socket.id);
+    } else {
+        users[roomID] = [socket.id];
+    }
+    socketToRoom[socket.id] = roomID;
+    const usersInThisRoom = users[roomID].filter(id => id !== socket.id);
+
+    socket.emit("all users", usersInThisRoom);
+});
+
+socket.on("sending signal", payload => {
+    io.to(payload.userToSignal).emit('user joined', { signal: payload.signal, callerID: payload.callerID });
+});
+
+socket.on("returning signal", payload => {
+    io.to(payload.callerID).emit('receiving returned signal', { signal: payload.signal, id: socket.id });
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Handle new user connection
+socket.on('join-room', (roomId, userId) => {
+  socket.join(roomId);
+  socket.to(roomId).broadcast.emit('user-connected', userId);
+
+  // Handle user disconnect
+  socket.on('disconnect', () => {
+    socket.to(roomId).broadcast.emit('user-disconnected', userId);
+  });
+});
+
+
+
   console.log(`User connected: ${socket.id}`);
 
-  // WebRTC signaling for creating room
-  socket.on('create-room-request', () => {
-    socket.join(socket.id);
+  socket.on('new-meeting_request', (userData)=>{
+    const RoomID = Generate_ID();
+    socket.emit('new-meeting_response', ({
+      RoomID : RoomID,
+      userData : userData,
+      socketID : socket.id
+    }))
+  })
 
-    // Send room ID to the client
-    socket.emit('create-room-response', {
-      roomID: socket.id,
-    });
-  });
 
-  // WebRTC signaling for joining a room
-  socket.on('join-room-request', (roomID) => {
-    socket.join(roomID);
 
-    // Notify the room that a user has joined
-    io.to(roomID).emit('join-room-response', {
-      message: 'User joined',
-      roomID: roomID,
-    });
-  });
 
-  // WebRTC signaling for offer
-  socket.on('offer', (data) => {
-	console.log(data.roomID)
-    io.to(data.roomID).emit('offer', {
-      signal: data.signal,
-      callerID: socket.id,
-	  msg : "Test"
-    });
-  });
 
-  // WebRTC signaling for answer
-  socket.on('answer', (data) => {
-    io.to(data.roomID).emit('answer', {
-      signal: data.signal,
-      calleeID: socket.id,
-    });
-  });
 
-  // WebRTC signaling for ICE candidates
-  socket.on('ice-candidate', (data) => {
-    io.to(data.roomID).emit('ice-candidate', {
-      candidate: data.candidate,
-      senderID: socket.id,
-    });
-  });
 
-  // Handle user disconnection
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-    // Perform necessary cleanup or notify others if needed
-  });
+
+
+
+
+
+
 });
 
 // Start the server
