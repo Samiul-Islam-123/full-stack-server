@@ -14,6 +14,8 @@ const http = require('http');
 const socketIo = require('socket.io');
 const uuid = require('uuid')
 const { ExpressPeerServer } = require('peer');
+const VideoStreamingCreateRoutes = require('./Routes/ServiceOperations/VideoStreaming/CreateRoutes');
+const VideoStreamingReadRoute = require('./Routes/ServiceOperations/VideoStreaming/ReadRoute');
 
 
 
@@ -59,6 +61,9 @@ passport.use(
     app.use('/auth/manual', LoginRoute);
     app.use('/auth/manual', VerificationRoute);
     app.use('/auth/manual', ResetPasswordRoute);
+
+    app.use('/api/video-stream/', VideoStreamingCreateRoutes)
+    app.use('/api/video-stream/', VideoStreamingReadRoute)
     
     function Generate_ID (){
       const ID = uuid.v4();
