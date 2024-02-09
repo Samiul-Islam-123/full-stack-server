@@ -16,6 +16,9 @@ const uuid = require('uuid')
 const { ExpressPeerServer } = require('peer');
 const VideoStreamingCreateRoutes = require('./Routes/ServiceOperations/VideoStreaming/CreateRoutes');
 const VideoStreamingReadRoute = require('./Routes/ServiceOperations/VideoStreaming/ReadRoute');
+const GeniusRoute = require('./Routes/ServiceOperations/Genius/GeniusRoutes');
+const PostRoutes = require('./Routes/ServiceOperations/ProjectManagement/PostRoutes');
+const FetchRoute = require('./Routes/ServiceOperations/ProjectManagement/FetchRoutes');
 
 
 
@@ -64,6 +67,12 @@ passport.use(
 
     app.use('/api/video-stream/', VideoStreamingCreateRoutes)
     app.use('/api/video-stream/', VideoStreamingReadRoute)
+
+    app.use('/api/genius', GeniusRoute);
+
+    app.use('/api/project-management', PostRoutes)
+    app.use('/api/project-management', FetchRoute)
+    
     
     function Generate_ID (){
       const ID = uuid.v4();
