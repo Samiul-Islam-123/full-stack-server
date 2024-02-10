@@ -1,3 +1,4 @@
+const ChatModel = require('../../../Database/Models/ProjectManagement/ChatModel');
 const TeamDataModel = require('../../../Database/Models/ProjectManagement/TeamDataModel');
 const AuthUtils = require('../../../Utils/AuthUtils')
 const FetchRoute = require('express').Router();
@@ -75,5 +76,24 @@ FetchRoute.get('/search-user/:query', async (req, res) => {
         return res.status(400).send("There was a problem with your request. Please try again.");
     }
 });
+
+FetchRoute.get('/get-chats/:teamID', async(req,res)=>{
+    try{
+        const chats = await ChatModel.find({
+            Team : req.params.teamID
+        }).populate('sender')
+        res.json({
+            success : true,
+            chats : chats
+        })
+    }
+    catch(error){
+        console.log(error);
+        res.json({
+            success : false,
+            message : "An error occured :("
+        })
+    }
+})
 
 module.exports = FetchRoute;

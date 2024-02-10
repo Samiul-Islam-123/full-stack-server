@@ -12,14 +12,16 @@ const VerificationRoute = require('./Routes/Manual/Verification');
 const ResetPasswordRoute = require('./Routes/Manual/PasswordReset');
 const http = require('http');
 const socketIo = require('socket.io');
-const uuid = require('uuid')
+const { v4: uuidv4 } = require('uuid');
 const { ExpressPeerServer } = require('peer');
 const VideoStreamingCreateRoutes = require('./Routes/ServiceOperations/VideoStreaming/CreateRoutes');
 const VideoStreamingReadRoute = require('./Routes/ServiceOperations/VideoStreaming/ReadRoute');
 const GeniusRoute = require('./Routes/ServiceOperations/Genius/GeniusRoutes');
 const PostRoutes = require('./Routes/ServiceOperations/ProjectManagement/PostRoutes');
 const FetchRoute = require('./Routes/ServiceOperations/ProjectManagement/FetchRoutes');
-
+const AuthUtils = require('./Utils/AuthUtils');
+const TeamDataModel = require('./Database/Models/ProjectManagement/TeamDataModel');
+const ChatModel = require('./Database/Models/ProjectManagement/ChatModel');
 
 
 const app = express();
@@ -99,9 +101,124 @@ passport.use(
 
 
 
+    var usersMapBoard = [];//this array will keep track of users watching the live board
+
 // Socket.IO logic
 io.on('connection', (socket) => {
 
+//events for handling Chats
+socket.on('join-chat-room', async(data)=>{
+  const token = data.token;
+  const decodedtoken = await AuthUtils.decodeToken(token);
+  socket.join(data.roomID);
+  console.log('user joined')
+  socket.emit('userData', decodedtoken)
+  io.to(data.roomID).emit('user-joined', {
+    message : `${decodedtoken.username} Joined the Room`
+  })
+})
+
+socket.on('chat-message', async(data)=>{
+  //console.log(data)  
+  const token = data.token;
+  const decodedtoken = await AuthUtils.decodeToken(token);
+  io.to(data.roomID).emit('chat-broadcasting', {
+    data : data,
+    userData : decodedtoken
+  })
+  //save the chat to database
+ try{
+  const currentChat = new ChatModel({
+    Team : data.roomID,
+    sender : decodedtoken.user_id,
+    content : data.content,
+    timestamp : data.timestamp
+  })
+  await currentChat.save();
+  console.log("Chats saved")
+ }
+ catch(error){
+  io.to(data.roomID).emit('chat-broadcasting', {
+    message : "Error occured while saving chats"
+  })
+ }
+})
+
+
+//events for handling live whiteBoard
+
+socket.on('create-live-room', ()=>{
+const roomId = uuidv4();
+socket.emit('roomID', roomId);
+})
+
+socket.on('join-live-room', async(data)=>{
+  let roomId=data.roomId;
+  const decodedtoken = await AuthUtils.decodeToken(data.token);
+  socket.join(roomId);
+  usersMapBoard.push({
+    username : decodedtoken.username,
+    roomId : roomId,
+    timestamp : new Date().getTime()
+  })
+  io.to(roomId).emit('user-joined-live-room', {
+    username: decodedtoken.username,
+    roomID : roomId,
+    message :  `${decodedtoken.username} joined the room`
+  })
+})
+
+socket.on('req-live-members', (roomId)=>{
+  let membersList = usersMapBoard.filter((item) => item.roomId === roomId );
+  io.to(roomId).emit('live-members', membersList)
+})
+
+socket.on('drawing', (data)=>{
+  io.to(data.roomId).emit('get-drawing', data)
+})
+
+
+
+//event for sending and accepting join requests in real time
+socket.on("request-join-team", async(data)=>{
+  const token = data.token;
+  const decodedtoken = await AuthUtils.decodeToken(token);
+  const senderID = decodedtoken.user_id;
+  const receiverID = data.receiverID;
+  const TeamID = data.TeamID;
+  try{
+    const currentTeamData = await TeamDataModel.findOne({
+        _id : TeamID
+    });
+    if(currentTeamData)
+        {
+           currentTeamData.Members.push({
+                user : receiverID,
+                role : "Teammate"
+            })
+
+            await currentTeamData.save();
+           io.emit('response-join-team', {
+            success : true,
+            message : "member added"
+           })
+        }
+
+        else{
+          socket.emit('response-join-team', {
+            success : true,
+            message : "No teams found"
+           })
+        }
+}
+catch(error){
+    console.error(error);
+    return socket.emit('response-join-team', {
+      success : false,
+      message : "An error occured while sending join request"
+     })
+}
+}) 
 
   socket.on("join room", roomID => {
     if (users[roomID]) {
@@ -162,7 +279,8 @@ socket.on('join-room', (roomId, userId) => {
 
   // Handle user disconnect
   socket.on('disconnect', () => {
-    socket.to(roomId).broadcast.emit('user-disconnected', userId);
+    // Find and remove the disconnected user from the array
+   console.log('disconnected')
   });
 });
 

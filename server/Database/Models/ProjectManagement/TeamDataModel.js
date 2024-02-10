@@ -30,6 +30,22 @@ const TeamDataSchema = new mongoose.Schema({
             Completed : Boolean,
             Date : Date
         }
+    ],
+
+    Requests : [
+        {
+            sender : {
+                type : mongoose.Schema.Types.ObjectId,
+                ref : "user"
+            },
+            receiver : {
+                type : mongoose.Schema.Types.ObjectId,
+                ref : "user"
+            },
+            accepted : Boolean,
+            Date : Date
+            
+        }
     ]
 });
 
