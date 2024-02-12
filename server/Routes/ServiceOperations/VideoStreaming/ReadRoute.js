@@ -42,5 +42,25 @@ VideoStreamingReadRoute.get('/stream', async (req, res) => {
 });
 
 
+VideoStreamingReadRoute.get('/video-data/:ID', async (req, res) => {
+    try {
+        const FetchedData = await PostModel.findOne({
+            _id : req.params.ID
+        }).populate('owner');
+       
+        res.json({
+            success: true,
+            videoData: FetchedData
+        })
+    }
+    catch (error) {
+        console.log(error);
+        res.json({
+            success : false,
+            errro : error
+        })
+    }
+})
+
 
 module.exports = VideoStreamingReadRoute;

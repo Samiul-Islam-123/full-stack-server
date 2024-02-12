@@ -159,7 +159,7 @@ socket.on('join-live-room', async(data)=>{
   usersMapBoard.push({
     username : decodedtoken.username,
     roomId : roomId,
-    timestamp : new Date().getTime()
+    userId:socket.id
   })
   io.to(roomId).emit('user-joined-live-room', {
     username: decodedtoken.username,
@@ -278,11 +278,32 @@ socket.on('join-room', (roomId, userId) => {
   socket.to(roomId).broadcast.emit('user-connected', userId);
 
   // Handle user disconnect
-  socket.on('disconnect', () => {
-    // Find and remove the disconnected user from the array
-   console.log('disconnected')
-  });
 });
+
+// Handle user disconnection
+// Handle user disconnection
+socket.on('disconnect', () => {
+  console.log(`Disconnected user ID: ${socket.id}`);
+  
+  // Remove the disconnected user from the usersMapBoard
+  const index = usersMapBoard.findIndex(user => user.userId === socket.id);
+  if (index !== -1) {
+      const disconnectedUser = usersMapBoard[index];
+      const RoomID = usersMapBoard[index].roomId
+      usersMapBoard.splice(index, 1);
+      io.to(RoomID).emit('live-members', usersMapBoard)
+
+      io.to(RoomID).emit('user-disconnected', disconnectedUser);
+      
+      // Broadcast to the room that the user has left
+      
+  }
+  
+     
+  
+});
+
+
 
 
 

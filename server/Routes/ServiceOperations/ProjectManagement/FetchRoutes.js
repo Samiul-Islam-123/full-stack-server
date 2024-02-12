@@ -1,59 +1,62 @@
 const ChatModel = require('../../../Database/Models/ProjectManagement/ChatModel');
+const MediaModel = require('../../../Database/Models/ProjectManagement/MediaModel');
 const TeamDataModel = require('../../../Database/Models/ProjectManagement/TeamDataModel');
 const AuthUtils = require('../../../Utils/AuthUtils')
 const FetchRoute = require('express').Router();
 const UserModel = require('./../../../Database/Models/UserModel')
 
-FetchRoute.get('/get-teams', async(req,res)=>{
-    try{
+FetchRoute.get('/get-teams', async (req, res) => {
+    try {
         const token = req.headers.authorization;
-        if(!token) return res.status(401).send({error: 'Token missing'});
+        if (!token) return res.status(401).send({ error: 'Token missing' });
 
         const decodedToken = await AuthUtils.decodeToken(token);
         const myID = decodedToken.user_id
         const myTeams = await TeamDataModel.find({
-            $or : [
-                {TeamLeader : myID},
-                {Members : {
-                    $elemMatch : 
-                    {user : myID}
-                }}
+            $or: [
+                { TeamLeader: myID },
+                {
+                    Members: {
+                        $elemMatch:
+                            { user: myID }
+                    }
+                }
             ]
         }).populate('Members.user')
 
         res.json({
-            success : true,
-            MyTeams : myTeams
+            success: true,
+            MyTeams: myTeams
         })
 
     }
-    catch(error){
-        console.log("Error found while Fetching teams : "+error)
+    catch (error) {
+        console.log("Error found while Fetching teams : " + error)
         res.json({
-            message : "error",
-            error : error
+            message: "error",
+            error: error
         })
     }
 })
 
-FetchRoute.get('/get-teams-id/:teamID', async(req,res)=>{
-    try{
+FetchRoute.get('/get-teams-id/:teamID', async (req, res) => {
+    try {
 
         const myTeams = await TeamDataModel.find({
-            _id : req.params.teamID
+            _id: req.params.teamID
         }).populate('Members.user')
 
         res.json({
-            success : true,
-            MyTeams : myTeams
+            success: true,
+            MyTeams: myTeams
         })
 
     }
-    catch(error){
-        console.log("Error found while Fetching teams : "+error)
+    catch (error) {
+        console.log("Error found while Fetching teams : " + error)
         res.json({
-            message : "error",
-            error : error
+            message: "error",
+            error: error
         })
     }
 })
@@ -61,7 +64,7 @@ FetchRoute.get('/get-teams-id/:teamID', async(req,res)=>{
 FetchRoute.get('/search-user/:query', async (req, res) => {
     try {
         let userQuery = req.params.query;
-        
+
         // Use regular expression for case-insensitive search
         const usersFound = await UserModel.find({
             username: { $regex: userQuery, $options: 'i' }
@@ -77,21 +80,44 @@ FetchRoute.get('/search-user/:query', async (req, res) => {
     }
 });
 
-FetchRoute.get('/get-chats/:teamID', async(req,res)=>{
-    try{
+FetchRoute.get('/get-chats/:teamID', async (req, res) => {
+    try {
         const chats = await ChatModel.find({
-            Team : req.params.teamID
+            Team: req.params.teamID
         }).populate('sender')
         res.json({
-            success : true,
-            chats : chats
+            success: true,
+            chats: chats
         })
     }
-    catch(error){
+    catch (error) {
         console.log(error);
         res.json({
-            success : false,
-            message : "An error occured :("
+            success: false,
+            message: "An error occured :("
+        })
+    }
+})
+
+
+//routes forMedia Section
+FetchRoute.get('/get-files/:token', async (req, res) => {
+    try {
+        const token = req.params.token;
+        const decodedToken = await AuthUtils.decodeToken(token);
+        const files = await MediaModel.find({
+            uploadedBy: decodedToken.user_id
+        }).populate('uploadedBy')
+        res.json({
+            success: true,
+            files: files
+        })
+    }
+    catch (error) {
+        console.log(error);
+        res.json({
+            success: false,
+            message: "An error occured :("
         })
     }
 })
